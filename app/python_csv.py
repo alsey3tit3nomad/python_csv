@@ -1,38 +1,36 @@
 import argparse
 import csv
 from tabulate import tabulate
+import re
 
 def mean(values):
-    if len(values) == 0:
-        return None
-    curr_sum = 0
-    for num in values:
-        curr_sum += num
-    return curr_sum/len(values)
+    try:
+        return sum(values)/len(values)
+    except TypeError:
+        raise TypeError("Нельзя применить avg к данной колонке")
+    except ZeroDivisionError:
+        raise ZeroDivisionError("Невозмонжо поделить на ноль")
 
 def try_convert(value):
-    try:
-        try:
-            return float(value)
-        except ValueError:
-            return int(value)
-    except ValueError:
+    if (re.fullmatch(r"\d+.\d+", value)):
+        return float(value)
+    elif (re.fullmatch(r"\d+", value)):
+        return int(value)
+    else:
         return value
 
 def parse_filter(filter_str):
-    for operator in ['>', '<', '=']:
-        if operator in filter_str:
-            column, value = filter_str.split(operator)
-            return column, operator, try_convert(value)
+    if (re.fullmatch(r"\b[a-zA-Zа-яА-ЯёЁ]+[><=]{1}[0-9a-zA-Zа-яА-ЯёЁ]+\b", filter_str)):
+        column, value = re.split(r'[><=]{1}', filter_str, maxsplit=1)
+        operator = re.search(r'[><=]{1}', filter_str)[0]
+        return column, operator, try_convert(value)
     raise ValueError("Неверно указана фильтрация")
 
+
 def parse_order(order_str):
-    if '=' not in order_str:
-        raise ValueError('Неверно указано сортировка')
-    for how in ['asc', 'desc']:
-        if (how in order_str):
-            column, how = order_str.split('=', maxsplit=1)
-            return column, how
+    if re.fullmatch(r"\b[a-zA-Zа-яА-ЯёЁ]+={1}(?:asc|desc)\b", order_str):
+        column, how = re.split(r"=", order_str, maxsplit=1)
+        return column, how
     raise ValueError("Неверно указана сортировка")
 
 def sort_by(data, order_arg):
@@ -51,23 +49,21 @@ def apply_filter(data, condition):
         return data
     column, operator, value = parse_filter(condition)
     filtered_data = []
+    operator_map = {
+        '>': lambda x, y: x > y,
+        '<': lambda x, y: x < y,
+        '=': lambda x, y: x == y
+    }
     for row in data:
         curr_value = try_convert(row[column])
         if column not in row:
             raise ValueError(f'Колонки {column} нет в данных')
-        if isinstance(curr_value, (int , float)) and isinstance(value, (int , float)):
-            if operator == '>' and curr_value > value:
-                filtered_data.append(row)
-            elif operator == '<' and curr_value < value:
-                filtered_data.append(row)
-            elif operator == '=' and curr_value == value:
-                filtered_data.append(row)
-        elif isinstance(curr_value, str) and isinstance(value, str):
-            if operator == '>' and curr_value > value:
-                filtered_data.append(row)
-            elif operator == '<' and curr_value < value:
-                filtered_data.append(row)
-            elif operator == '=' and curr_value == value:
+        if (
+            isinstance(curr_value, (int , float)) and isinstance(value, (int , float))
+            or
+            isinstance(curr_value, str) and isinstance(value, str)
+        ):
+            if (operator_map[operator](curr_value, value)):
                 filtered_data.append(row)
         else:
             raise ValueError(f'Невозможно сравнить {row[column]} и {value}\nтипы: {type(curr_value)}, {type(value)}')
@@ -79,19 +75,14 @@ def aggregate_data(data, column, agg_func):
 
     if not values:
         return None
-
+    map_agg_funcs = {
+        'avg': lambda val : mean(val),
+        'min': lambda val : min(val),
+        'max': lambda val : max(val)
+    }
     if (agg_func not in ['avg', 'min', 'max']):
         raise ValueError('Неизвестная агрегационная функция')
-
-    if (agg_func == 'min'):
-        return min(values)
-    elif (agg_func == 'max'):
-        return max(values)
-    elif (agg_func == 'avg' and isinstance(values[0], (int, float))):
-        return mean(values)
-
-    else:
-        raise ValueError(f"Невозможно применить агрегацию к {type(values[0])}")
+    return map_agg_funcs[agg_func](values)
 
 
 def run_pipeline(file_path, where=None, order_by=None, aggregate=None):

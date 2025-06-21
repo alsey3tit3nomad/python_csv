@@ -15,15 +15,18 @@ import tempfile
 from tabulate import tabulate
 
 @pytest.mark.parametrize(
-    "values, res",
+    "values, res, raises",
     [
-        ([1, 2, 3], 2),
-        ([10, 20], 15),
-        ([100], 100),
+        ([1, 2, 3], 2, does_not_raise()),
+        ([10, 20], 15, does_not_raise()),
+        ([100], 100, does_not_raise()),
+        ([], None, pytest.raises(ZeroDivisionError)),
+        (['a', 'b'], None, pytest.raises(TypeError))
     ]
 )
-def test_mean(values, res):
-    assert mean(values) == res
+def test_mean(values, res, raises):
+    with raises:
+        assert mean(values) == res
 
 @pytest.mark.parametrize(
     "value, res",
@@ -99,7 +102,7 @@ def test_order_by(data, order_str, res_first_name):
         ([{"price": "10"}, {"price": "20"}], "price", "min", 10, does_not_raise()),
         ([{"price": "10"}, {"price": "20"}], "price", "max", 20, does_not_raise()),
         ([{"price": "10"}], "price", "sum", None, pytest.raises(ValueError)),
-        ([{"brand": "apple"}], "brand", "avg", None, pytest.raises(ValueError)),
+        ([{"brand": "apple"}], "brand", "avg", None, pytest.raises(TypeError)),
     ]
 )
 def test_aggregate_data(data, column, func, res, raises):
